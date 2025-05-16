@@ -1,7 +1,5 @@
 import os
 import argparse
-import torch
-import collections
 
 from models.model import UNet
 from data.data_loader import MedicalDataset, create_dataloader
@@ -22,7 +20,7 @@ def get_parser():
     parser.add_argument('--num_workers', default=4, type=int)
     parser.add_argument('--epochs', type=int, default=1000)
     parser.add_argument('--batch_size', default=4, type=int)
-    parser.add_argument('--lr', type=float, default=1e-6)
+    parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--weight_decay', type=float, default=1e-2)
     parser.add_argument('--save_interval', default=20, type=int)
     parser.add_argument('--early_stop_patience', default=200, type=int)

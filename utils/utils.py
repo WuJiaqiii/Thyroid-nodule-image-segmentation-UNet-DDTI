@@ -5,7 +5,6 @@ import numpy as np
 import random
 from datetime import datetime, timedelta, timezone
 import yaml
-import datetime
 import pytz
 from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
@@ -33,7 +32,7 @@ class Config:
         self.base_dir = 'experiments'
         os.makedirs(self.base_dir, exist_ok=True)
         
-        current_time = datetime.datetime.now(pytz.utc)
+        current_time = datetime.now(pytz.utc)
         current_time = current_time.astimezone(pytz.timezone("Asia/Shanghai"))
         self.cfg_dir = '%s/%s' % (self.base_dir, str(current_time.strftime("%Y%m%d_%H%M%S")))
         self.model_dir = '%s/models' % self.cfg_dir

@@ -113,8 +113,8 @@ class Trainer:
         iou = calculate_iou(preds, targets)
         end = time.time()
 
-        self.logger.info(f'Validate Epoch: {epoch + 1}, Avg Loss: {loss_record.avg:.4f}, acc: {acc:.4f}, \
-                         precision: {precision:.4f}, recall: {recall:.4f}, f1: {f1:.4f}, IoU: {iou:.4f}')
+        self.logger.info(f'Validate Epoch: {epoch + 1}, Avg Loss: {loss_record.avg:.4f}, acc: {acc:.4f}, '
+                         f'precision: {precision:.4f}, recall: {recall:.4f}, f1: {f1:.4f}, IoU: {iou:.4f}')
         self.logger.info(f'Spend: {(end - start)/60.0:.2f} minutes for evaluation')
         self.writer.add_scalar("Loss/Validation", loss_record.avg, epoch)
         self.writer.add_scalar("Acc/Validation", acc, epoch)
