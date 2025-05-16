@@ -64,8 +64,8 @@ class Trainer:
                 self.optimizer.step()
 
             loss_record.update(loss.item(), masks.size(0))
-            preds.append(torch.sigmoid(logits) > 0.5)
-            targets.append(masks)
+            preds.append((torch.sigmoid(logits) > 0.5).cpu().numpy())
+            targets.append(masks.cpu().numpy())
         
         preds, targets = np.concatenate(preds), np.concatenate(targets)
         acc = calculate_acc(preds, targets)
@@ -104,7 +104,7 @@ class Trainer:
 
             loss_record.update(loss.item(), masks.size(0))
             
-            preds.append(torch.sigmoid(logits) > 0.5)
+            preds.append((torch.sigmoid(logits) > 0.5).cpu().numpy())
             targets.append(masks.cpu().numpy())   
          
         preds, targets = np.concatenate(preds), np.concatenate(targets)
