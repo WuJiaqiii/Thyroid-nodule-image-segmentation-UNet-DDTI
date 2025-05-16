@@ -1,0 +1,4 @@
+*.pdf
+*.pth
+*.DS_Store
+data/dataset/*
