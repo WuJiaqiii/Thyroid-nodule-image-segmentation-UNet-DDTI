@@ -16,6 +16,8 @@ def get_parser():
     parser.add_argument('--dataset_path', default='/root/Desktop/Thyroid-nodule-image-segmentation-UNet-DDTI/data/dataset', type=str)
     parser.add_argument('--dataset', default='DDTI', type=str)
 
+    parser.add_argument('--checkpoint_path', default=None, type=str)
+
     ## train config
     parser.add_argument('--num_workers', default=4, type=int)
     parser.add_argument('--epochs', type=int, default=1000)
@@ -62,6 +64,8 @@ def main(args):
     test_dataloader = create_dataloader(test_dataset, config, shuffle=True)
 
     unet = UNet(in_channels=1, out_channels=1)
+    if config.checkpoint_path:
+        unet.load_state_dict(torch.load(config.checkpoint_path, weights_only=True))
 
     trainer = Trainer(config, (train_dataloader, val_dataloader, test_dataloader), logger, unet)
 
