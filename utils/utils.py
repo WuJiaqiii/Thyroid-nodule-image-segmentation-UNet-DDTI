@@ -146,27 +146,33 @@ def save_confusion_matrix(targets, preds, config, epoch):
     plt.savefig(os.path.join(config.result_dir, f'epoch_{epoch + 1}_confusion_matrix'), dpi=500, bbox_inches='tight')
     plt.close()
 
-
 def calculate_iou(pred, target):
-    """计算二值掩码IoU"""
-    intersection = torch.sum(pred * target)
-    union = torch.sum(pred) + torch.sum(target) - intersection
-    iou = intersection / union
-    return iou
+    """纯 NumPy 版二值掩码 IoU"""
+    pred = pred.astype(bool)
+    target = target.astype(bool)
+    intersection = np.logical_and(pred, target).sum()
+    union        = np.logical_or(pred, target).sum()
+    return intersection / union
 
 def calculate_acc(pred, target):
-    """计算准确率"""
-    return (pred == target).sum() / target.numel()
+    pred = pred.astype(int)
+    target = target.astype(int)
+    correct = (pred == target).sum()
+    total   = pred.size
+    return correct / total
 
 def calculate_precision_recall_f1(pred, target):
-    """计算精确率，召回率，F1"""
-    TP = (pred * target).sum()
-    FP = ((pred == 1) & (target == 0)).sum()
-    FN = ((pred == 0) & (target == 1)).sum()
-    precision = TP / (TP + FP)
-    recall = TP / (TP + FN)
-    f1 = 2 * (precision * recall) / (precision + recall)
-    return precision, recall , f1
+    pred = pred.astype(int)
+    target = target.astype(int)
+
+    TP = np.logical_and(pred==1, target==1).sum()
+    FP = np.logical_and(pred==1, target==0).sum()
+    FN = np.logical_and(pred==0, target==1).sum()
+
+    precision = TP / (TP + FP) if TP+FP>0 else 0.0
+    recall    = TP / (TP + FN) if TP+FN>0 else 0.0
+    f1        = 2 * precision * recall / (precision + recall) if precision+recall>0 else 0.0
+    return precision, recall, f1
 
 def init_weights(m):
     """初始化模型权重"""
