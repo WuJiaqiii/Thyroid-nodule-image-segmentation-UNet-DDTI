@@ -35,7 +35,7 @@ class Config:
         
         current_time = datetime.datetime.now(pytz.utc)
         current_time = current_time.astimezone(pytz.timezone("Asia/Shanghai"))
-        self.cfg_dir = '%s/%s' % (self.base_dir, self.dataset + '_' + str(self.num_known_classes) + '-' + str(self.num_unknown_classes) + '_' + str(current_time.strftime("%Y%m%d_%H%M%S")))
+        self.cfg_dir = '%s/%s' % (self.base_dir, str(current_time.strftime("%Y%m%d_%H%M%S")))
         self.model_dir = '%s/models' % self.cfg_dir
         self.log_dir = '%s/log' % self.cfg_dir
         self.result_dir = '%s/result' % self.cfg_dir

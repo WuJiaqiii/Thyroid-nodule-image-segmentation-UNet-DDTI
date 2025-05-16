@@ -2,3 +2,5 @@
 *.pth
 *.DS_Store
 data/dataset/*
+*/__pycache__
+experiments/*

@@ -15,12 +15,13 @@ def get_parser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
     ## dataset config
-    parser.add_argument('--dataset_path', default='/Users/wujiaqi/work/Template/data/dataset', type=str)
+    parser.add_argument('--dataset_path', default='/root/Desktop/Thyroid-nodule-image-segmentation-UNet-DDTI/data/dataset', type=str)
+    parser.add_argument('--dataset', default='DDTI', type=str)
 
     ## train config
     parser.add_argument('--num_workers', default=4, type=int)
     parser.add_argument('--epochs', type=int, default=1000)
-    parser.add_argument('--batch_size', default=128, type=int)
+    parser.add_argument('--batch_size', default=4, type=int)
     parser.add_argument('--lr', type=float, default=1e-6)
     parser.add_argument('--weight_decay', type=float, default=1e-2)
     parser.add_argument('--save_interval', default=20, type=int)
