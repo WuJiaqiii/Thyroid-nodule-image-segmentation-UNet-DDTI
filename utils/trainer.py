@@ -5,6 +5,9 @@ import torch.nn as nn
 from tqdm import tqdm
 import os
 import matplotlib.pyplot as plt
+from skimage import measure
+
+from models.loss import DiceLoss
 from torch.amp import autocast, GradScaler
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim import AdamW
@@ -30,7 +33,11 @@ class Trainer:
         if self.config.use_amp_autocast and self.device == 'cuda':
             self.scaler = GradScaler(device="cuda")
 
-        self.criterion = nn.BCEWithLogitsLoss()
+        # self.criterion = nn.BCEWithLogitsLoss()
+        # bce = nn.BCEWithLogitsLoss()
+        # dice = DiceLoss()
+        self.criterion = DiceLoss()
+        # lambda logits, masks: bce(logits, masks) + 10 * dice(logits, masks)
         self.optimizer = AdamW(self.model.parameters(), lr=self.config.lr)
         self.scheduler = CosineAnnealingWarmRestarts(self.optimizer, T_0=20, T_mult=2, eta_min=0)
             
@@ -71,8 +78,8 @@ class Trainer:
         acc = calculate_acc(preds, targets)
         precision, recall, f1 = calculate_precision_recall_f1(preds, targets)
         iou = calculate_iou(preds, targets)
-        self.logger.info(f'Train Epoch: {epoch + 1}, Avg Loss: {loss_record.avg:.4f}, acc: {acc:.4f}, \
-                         precision: {precision:.4f}, recall: {recall:.4f}, f1: {f1:.4f}, IoU: {iou:.4f}')
+        self.logger.info(f'Train Epoch: {epoch + 1}, Avg Loss: {loss_record.avg:.4f}, acc: {acc:.4f}, '
+                         f'precision: {precision:.4f}, recall: {recall:.4f}, f1: {f1:.4f}, IoU: {iou:.4f}')
         self.writer.add_scalar("Loss/Train", loss_record.avg, epoch)
         self.writer.add_scalar("Acc/Train", acc, epoch)
         self.writer.add_scalar("Precision/Train", precision, epoch)
@@ -157,21 +164,81 @@ class Trainer:
         
         self.writer.close()
 
-    def test(self):
-        with torch.no_grad():
-            for batch_idx, (images, masks) in enumerate(tqdm(self.test_loader, desc='Testing Model', leave=True)):
+    # def test(self):
+    #     with torch.no_grad():
+    #         for batch_idx, (images, masks) in enumerate(tqdm(self.test_loader, desc='Testing Model', leave=True)):
 
-                images, masks = images.to(self.config.device), masks.to(self.config.device)
-                logits = self.model(images)  
-                pred = (torch.sigmoid(logits) > 0.5)
+    #             images, masks = images.to(self.config.device), masks.to(self.config.device)
+    #             logits = self.model(images)  
+    #             pred = (torch.sigmoid(logits) > 0.5)
 
-                plt.figure(figsize=(20, 20), dpi=80)
-                for i in range(self.config.batch_size):
-                    ax = plt.subplot(3, 4, i + 1)
-                    ax.imshow(images[i].permute(1, 2, 0).cpu())
-                    ax = plt.subplot(3, 4, i + 1 + 4)
-                    ax.imshow(masks[i].permute(1, 2, 0).cpu())
-                    ax = plt.subplot(3, 4, i + 1 + 8)
-                    ax.imshow(pred[i].permute(1, 2, 0).cpu())
+    #             plt.figure(figsize=(20, 20), dpi=80)
+    #             for i in range(self.config.batch_size):
+    #                 ax = plt.subplot(3, 4, i + 1)
+    #                 ax.imshow(images[i].permute(1, 2, 0).cpu())
+    #                 ax = plt.subplot(3, 4, i + 1 + 4)
+    #                 ax.imshow(masks[i].permute(1, 2, 0).cpu())
+    #                 ax = plt.subplot(3, 4, i + 1 + 8)
+    #                 ax.imshow(pred[i].permute(1, 2, 0).cpu())
                 
-                plt.savefig(os.path.join(self.config.result_dir, f'test_figure{batch_idx}.png'))
+    #             plt.savefig(os.path.join(self.config.result_dir, f'test_figure{batch_idx}.png'))
+    
+    @torch.no_grad()
+    def test(self):
+        """
+        在原图上绘制真值与预测的空心边界，并每20张保存一次（5行×4列）。
+        """
+          # 用于提取二值图的边界轮廓
+
+        self.model.eval()
+        all_imgs, all_masks, all_preds = [], [], []
+
+        # 收集所有测试样本
+        for images, masks in tqdm(self.test_loader, desc='Testing Model', leave=True):
+            images, masks = images.to(self.device), masks.to(self.device)
+            logits = self.model(images)
+            preds = (torch.sigmoid(logits) > 0.5).cpu().numpy().astype(np.uint8)
+
+            all_imgs.append(images.cpu().numpy())             # (B, C, H, W)
+            all_masks.append(masks.cpu().numpy().astype(np.uint8))
+            all_preds.append(preds)
+
+        # 拼接成 (N, C, H, W)
+        all_imgs  = np.concatenate(all_imgs,  axis=0)
+        all_masks = np.concatenate(all_masks, axis=0)
+        all_preds = np.concatenate(all_preds, axis=0)
+        total = all_imgs.shape[0]
+
+        # 每 20 张一组，绘制成 5 行 × 4 列
+        for batch_start in range(0, total, 20):
+            batch_end = min(batch_start + 20, total)
+            n = batch_end - batch_start
+
+            fig, axes = plt.subplots(5, 4, figsize=(16, 20))
+            axes = axes.flatten()
+
+            for i in range(n):
+                idx = batch_start + i
+                img  = all_imgs[idx].transpose(1, 2, 0).squeeze()  # H×W
+                mask = all_masks[idx].squeeze()                   # H×W binary
+                pred = all_preds[idx].squeeze()                   # H×W binary
+                ax = axes[i]
+
+                ax.imshow(img, cmap='gray')
+                # 真值边界 (蓝色)
+                for contour in measure.find_contours(mask, level=0.5):
+                    ax.plot(contour[:, 1], contour[:, 0], color='blue', linewidth=1)
+                # 预测边界 (红色)
+                for contour in measure.find_contours(pred, level=0.5):
+                    ax.plot(contour[:, 1], contour[:, 0], color='red', linewidth=1)
+
+                ax.axis('off')
+
+            # 隐藏多余子图
+            for j in range(n, 20):
+                axes[j].axis('off')
+
+            plt.tight_layout()
+            save_path = os.path.join(self.config.result_dir, f'test_boundaries_{batch_start//20}.png')
+            plt.savefig(save_path)
+            plt.close(fig)

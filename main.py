@@ -2,6 +2,7 @@ import os
 import argparse
 
 from models.model import UNet
+from models.vnet import ImprovedVNet
 from data.data_loader import MedicalDataset, create_dataloader
 
 from utils.utils import create_logger, set_seed, Config
@@ -63,13 +64,17 @@ def main(args):
     val_dataloader = create_dataloader(val_dataset, config, shuffle=False)
     test_dataloader = create_dataloader(test_dataset, config, shuffle=True)
 
+    
+    config.checkpoint_path = '/root/Desktop/Thyroid-nodule-image-segmentation-UNet-DDTI/experiments/20250516_161726/models/model_last.pth'
     unet = UNet(in_channels=1, out_channels=1)
     if config.checkpoint_path:
         unet.load_state_dict(torch.load(config.checkpoint_path, weights_only=True))
 
+    # vnet = ImprovedVNet()
+
     trainer = Trainer(config, (train_dataloader, val_dataloader, test_dataloader), logger, unet)
 
-    trainer.train()
+    # trainer.train()
     logger.info('------------------Starting Testing Model------------------')
     trainer.test()
 
