@@ -17,16 +17,17 @@ def get_parser():
     parser.add_argument('--dataset_path', default='/root/Desktop/Thyroid-nodule-image-segmentation-UNet-DDTI/data/dataset', type=str)
     parser.add_argument('--dataset', default='DDTI', type=str)
 
-    parser.add_argument('--checkpoint_path', default=None, type=str)
+    parser.add_argument('--checkpoint_path', default='/root/Desktop/Thyroid-nodule-image-segmentation-UNet-DDTI/model_last.pth', type=str)
 
     ## train config
     parser.add_argument('--num_workers', default=4, type=int)
     parser.add_argument('--epochs', type=int, default=1000)
     parser.add_argument('--batch_size', default=4, type=int)
-    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--lr', type=float, default=5e-5)
     parser.add_argument('--weight_decay', type=float, default=1e-2)
     parser.add_argument('--save_interval', default=20, type=int)
-    parser.add_argument('--early_stop_patience', default=200, type=int)
+    parser.add_argument('--early_stop_patience', default=20, type=int)
+    parser.add_argument('--alpha', type=float, default=2)
 
     ## other config
     parser.add_argument('--use_data_parallel', type=bool, default=True, help="Whether to use DataParallel for multi-GPU training")
@@ -65,17 +66,18 @@ def main(args):
     test_dataloader = create_dataloader(test_dataset, config, shuffle=True)
 
     
-    config.checkpoint_path = '/root/Desktop/Thyroid-nodule-image-segmentation-UNet-DDTI/experiments/20250516_161726/models/model_last.pth'
-    unet = UNet(in_channels=1, out_channels=1)
-    if config.checkpoint_path:
-        unet.load_state_dict(torch.load(config.checkpoint_path, weights_only=True))
+    # config.checkpoint_path = '/root/Desktop/Thyroid-nodule-image-segmentation-UNet-DDTI/experiments/20250516_161726/models/model_last.pth'
+    # unet = UNet(in_channels=1, out_channels=1)
+    # if config.checkpoint_path:
+    #     unet.load_state_dict(torch.load(config.checkpoint_path, weights_only=True))
 
-    # vnet = ImprovedVNet()
+    model = ImprovedVNet()
+    if os.path.isfile(config.checkpoint_path):
+        model.load_state_dict(torch.load(config.checkpoint_path, weights_only=True))
 
-    trainer = Trainer(config, (train_dataloader, val_dataloader, test_dataloader), logger, unet)
+    trainer = Trainer(config, (train_dataloader, val_dataloader, test_dataloader), logger, model)
 
-    # trainer.train()
-    logger.info('------------------Starting Testing Model------------------')
+    trainer.train()
     trainer.test()
 
 if __name__ == "__main__":

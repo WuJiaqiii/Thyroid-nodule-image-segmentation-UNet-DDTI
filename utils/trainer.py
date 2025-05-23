@@ -30,14 +30,10 @@ class Trainer:
         else:
             self.model = model.to(self.device)
 
-        if self.config.use_amp_autocast and self.device == 'cuda':
-            self.scaler = GradScaler(device="cuda")
+        self.scaler = GradScaler(enabled=self.config.use_amp_autocast and self.device == torch.device('cuda'), device="cuda")
 
-        # self.criterion = nn.BCEWithLogitsLoss()
-        # bce = nn.BCEWithLogitsLoss()
-        # dice = DiceLoss()
-        self.criterion = DiceLoss()
-        # lambda logits, masks: bce(logits, masks) + 10 * dice(logits, masks)
+        self.criterion_dice = DiceLoss()
+        self.criterion_bce = nn.BCEWithLogitsLoss()
         self.optimizer = AdamW(self.model.parameters(), lr=self.config.lr)
         self.scheduler = CosineAnnealingWarmRestarts(self.optimizer, T_0=20, T_mult=2, eta_min=0)
             
@@ -46,7 +42,8 @@ class Trainer:
         
     def train_one_epoch(self, epoch):
         
-        loss_record = AverageMeter()
+        bce_loss_record = AverageMeter()
+        dice_loss_record = AverageMeter()
         
         self.model.train()
         preds, targets = [], []
@@ -57,20 +54,19 @@ class Trainer:
 
             self.optimizer.zero_grad()
 
-            if self.config.use_amp_autocast:
-                with autocast():
-                    logits = self.model(images)
-                    loss = self.criterion(logits, masks)
-                self.scaler.scale(loss).backward()
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-            else:
+            with autocast(enabled=self.config.use_amp_autocast and self.device == torch.device('cuda'), device_type='cuda'):
                 logits = self.model(images)
-                loss = self.criterion(logits, masks)
-                loss.backward()
-                self.optimizer.step()
+                loss_bce = self.criterion_bce(logits, masks)
+                loss_dice = self.criterion_dice(logits, masks)
 
-            loss_record.update(loss.item(), masks.size(0))
+                loss = loss_bce + self.config.alpha * loss_dice
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+
+            bce_loss_record.update(loss_bce.item(), masks.size(0))
+            dice_loss_record.update(loss_dice.item(), masks.size(0))
+
             preds.append((torch.sigmoid(logits) > 0.5).cpu().numpy())
             targets.append(masks.cpu().numpy())
         
@@ -78,9 +74,11 @@ class Trainer:
         acc = calculate_acc(preds, targets)
         precision, recall, f1 = calculate_precision_recall_f1(preds, targets)
         iou = calculate_iou(preds, targets)
-        self.logger.info(f'Train Epoch: {epoch + 1}, Avg Loss: {loss_record.avg:.4f}, acc: {acc:.4f}, '
-                         f'precision: {precision:.4f}, recall: {recall:.4f}, f1: {f1:.4f}, IoU: {iou:.4f}')
-        self.writer.add_scalar("Loss/Train", loss_record.avg, epoch)
+        self.logger.info(f'Train Epoch: {epoch + 1}, Avg Loss: {(bce_loss_record.avg + self.config.alpha * dice_loss_record.avg):.4f}, '
+                         f'BCE Loss: {bce_loss_record.avg:.4f}, Dice Loss: {dice_loss_record.avg:.4f}, '
+                         f'acc: {acc:.4f}, precision: {precision:.4f}, recall: {recall:.4f}, f1: {f1:.4f}, IoU: {iou:.4f}')
+        self.writer.add_scalar("BCE Loss/Train", bce_loss_record.avg, epoch)
+        self.writer.add_scalar("Dice Loss/Train", dice_loss_record.avg, epoch)
         self.writer.add_scalar("Acc/Train", acc, epoch)
         self.writer.add_scalar("Precision/Train", precision, epoch)
         self.writer.add_scalar("Recall/Train", recall, epoch)
@@ -90,10 +88,9 @@ class Trainer:
     @torch.no_grad() 
     def validate(self, epoch):
         
-        loss_record = AverageMeter()
-
+        bce_loss_record = AverageMeter()
+        dice_loss_record = AverageMeter()
         self.model.eval()
-
         preds, targets = [], []
         start = time.time()
         for batch_idx, batch in enumerate(tqdm(self.val_loader, desc=f"Validating Epoch {epoch + 1}", leave=True)):
@@ -101,15 +98,13 @@ class Trainer:
             images, masks = batch
             images, masks = images.cuda(non_blocking=True), masks.cuda(non_blocking=True)
 
-            if self.config.use_amp_autocast:
-                with autocast():
-                    logits = self.model(images)
-                    loss = self.criterion(logits, masks)
-            else:
+            with autocast(enabled=self.config.use_amp_autocast and self.device == torch.device('cuda'), device_type='cuda'):
                 logits = self.model(images)
-                loss = self.criterion(logits, masks)
+                loss_bce = self.criterion_bce(logits, masks)
+                loss_dice = self.criterion_dice(logits, masks)
 
-            loss_record.update(loss.item(), masks.size(0))
+            bce_loss_record.update(loss_bce.item(), masks.size(0))
+            dice_loss_record.update(loss_dice.item(), masks.size(0))
             
             preds.append((torch.sigmoid(logits) > 0.5).cpu().numpy())
             targets.append(masks.cpu().numpy())   
@@ -118,19 +113,18 @@ class Trainer:
         acc = calculate_acc(preds, targets)
         precision, recall, f1 = calculate_precision_recall_f1(preds, targets)
         iou = calculate_iou(preds, targets)
-        end = time.time()
+        self.logger.info(f'Validate Epoch: {epoch + 1}, Avg Loss: {(bce_loss_record.avg + self.config.alpha * dice_loss_record.avg):.4f}, '
+                         f'BCE Loss: {bce_loss_record.avg:.4f}, Dice Loss: {dice_loss_record.avg:.4f}, '
+                         f'acc: {acc:.4f}, precision: {precision:.4f}, recall: {recall:.4f}, f1: {f1:.4f}, IoU: {iou:.4f}')
+        self.writer.add_scalar("BCE Loss/Validate", bce_loss_record.avg, epoch)
+        self.writer.add_scalar("Dice Loss/Validate", dice_loss_record.avg, epoch)
+        self.writer.add_scalar("Acc/Validate", acc, epoch)
+        self.writer.add_scalar("Precision/Validate", precision, epoch)
+        self.writer.add_scalar("Recall/Validate", recall, epoch)
+        self.writer.add_scalar("F1/Validate", f1, epoch)
+        self.writer.add_scalar("IoU/Validate", iou, epoch)
 
-        self.logger.info(f'Validate Epoch: {epoch + 1}, Avg Loss: {loss_record.avg:.4f}, acc: {acc:.4f}, '
-                         f'precision: {precision:.4f}, recall: {recall:.4f}, f1: {f1:.4f}, IoU: {iou:.4f}')
-        self.logger.info(f'Spend: {(end - start)/60.0:.2f} minutes for evaluation')
-        self.writer.add_scalar("Loss/Validation", loss_record.avg, epoch)
-        self.writer.add_scalar("Acc/Validation", acc, epoch)
-        self.writer.add_scalar("Precision/Validation", precision, epoch)
-        self.writer.add_scalar("Recall/Validation", recall, epoch)
-        self.writer.add_scalar("F1/Validation", f1, epoch)
-        self.writer.add_scalar("IoU/Validation", iou, epoch)
-
-        return loss_record.avg, iou
+        return bce_loss_record.avg + self.config.alpha * dice_loss_record.avg, iou
 
     def train(self):
         
@@ -163,37 +157,13 @@ class Trainer:
             torch.save(self.model.state_dict(), os.path.join(self.config.model_dir, f'model_last.pth'))
         
         self.writer.close()
-
-    # def test(self):
-    #     with torch.no_grad():
-    #         for batch_idx, (images, masks) in enumerate(tqdm(self.test_loader, desc='Testing Model', leave=True)):
-
-    #             images, masks = images.to(self.config.device), masks.to(self.config.device)
-    #             logits = self.model(images)  
-    #             pred = (torch.sigmoid(logits) > 0.5)
-
-    #             plt.figure(figsize=(20, 20), dpi=80)
-    #             for i in range(self.config.batch_size):
-    #                 ax = plt.subplot(3, 4, i + 1)
-    #                 ax.imshow(images[i].permute(1, 2, 0).cpu())
-    #                 ax = plt.subplot(3, 4, i + 1 + 4)
-    #                 ax.imshow(masks[i].permute(1, 2, 0).cpu())
-    #                 ax = plt.subplot(3, 4, i + 1 + 8)
-    #                 ax.imshow(pred[i].permute(1, 2, 0).cpu())
-                
-    #             plt.savefig(os.path.join(self.config.result_dir, f'test_figure{batch_idx}.png'))
     
     @torch.no_grad()
     def test(self):
-        """
-        在原图上绘制真值与预测的空心边界，并每20张保存一次（5行×4列）。
-        """
-          # 用于提取二值图的边界轮廓
+        self.logger.info('------------------Starting Testing Model------------------')
 
         self.model.eval()
         all_imgs, all_masks, all_preds = [], [], []
-
-        # 收集所有测试样本
         for images, masks in tqdm(self.test_loader, desc='Testing Model', leave=True):
             images, masks = images.to(self.device), masks.to(self.device)
             logits = self.model(images)
@@ -203,13 +173,11 @@ class Trainer:
             all_masks.append(masks.cpu().numpy().astype(np.uint8))
             all_preds.append(preds)
 
-        # 拼接成 (N, C, H, W)
         all_imgs  = np.concatenate(all_imgs,  axis=0)
         all_masks = np.concatenate(all_masks, axis=0)
         all_preds = np.concatenate(all_preds, axis=0)
         total = all_imgs.shape[0]
 
-        # 每 20 张一组，绘制成 5 行 × 4 列
         for batch_start in range(0, total, 20):
             batch_end = min(batch_start + 20, total)
             n = batch_end - batch_start
@@ -234,7 +202,6 @@ class Trainer:
 
                 ax.axis('off')
 
-            # 隐藏多余子图
             for j in range(n, 20):
                 axes[j].axis('off')
 
