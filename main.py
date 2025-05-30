@@ -12,6 +12,8 @@ from utils.utils import create_logger, set_seed, Config
 from utils.trainer import Trainer
 from utils.transforms import *
 
+import yaml
+
 def get_parser():
     
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -21,6 +23,7 @@ def get_parser():
     parser.add_argument('--dataset', default='DDTI', type=str)
 
     parser.add_argument('--checkpoint_path', default='model_last.pth', type=str)
+    parser.add_argument('--config_path', default=None, type=str)
 
     ## data argument config
     parser.add_argument('--p_crop', default=0, type=float)
@@ -45,7 +48,7 @@ def get_parser():
     parser.add_argument('--lr', type=float, default=1e-5)
     parser.add_argument('--weight_decay', type=float, default=1e-2)
     parser.add_argument('--save_interval', default=20, type=int)
-    parser.add_argument('--early_stop_patience', default=500, type=int)
+    parser.add_argument('--early_stop_patience', default=50, type=int)
     parser.add_argument('--alpha', type=float, default=2)
 
     ## other config
@@ -100,20 +103,32 @@ def main(args):
     val_dataloader = create_dataloader(val_dataset, config, shuffle=False)
     test_dataloader = create_dataloader(test_dataset, config, shuffle=True)
     
+    if os.path.isfile(config.config_path):
+        with open(config.config_path, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+            model_cfg   = cfg["model"]
+            model_type  = model_cfg["model_type"]   # 字符串 "VNet2D"
+            model_kwargs = model_cfg["kwargs"]      # dict: {"in_channels":1, …}
+    else:
+        logger.error(f'未找到配置文件：{config.config_path}')
+        raise FileNotFoundError(f'未找到配置文件：{config.config_path}')
+    
+    config.model_type = model_type
+    
     if config.model_type == 'UNet':
-        model = UNet(in_channels=1, out_channels=1)
+        model = UNet(**model_kwargs)
     elif config.model_type == 'VNet2D':
-        model = VNet2D(in_channels=1, out_channels=1)
+        model = VNet2D(**model_kwargs)
     elif config.model_type == 'ImprovedVNet':
-        model = ImprovedVNet(in_channels=1, out_channels=1)
+        model = ImprovedVNet(**model_kwargs)
     elif config.model_type == 'TransUNet':
-        model = TransUNet(in_channels=1, out_channels=1)
+        model = TransUNet(**model_kwargs)
     elif config.model_type == 'ResUNet':
-        model = ResUNet(in_channels=1, out_channels=1)
+        model = ResUNet(**model_kwargs)
     elif config.model_type == 'ASPPUNet':
-        model = ASPPUNet(in_channels=1, out_channels=1)
+        model = ASPPUNet(**model_kwargs)
     elif config.model_type == 'AttentionUNet':
-        model = AttentionUNet(in_channels=1, out_channels=1)
+        model = AttentionUNet(**model_kwargs)
     else:
         logger.error('Inplemented model')
         raise(NotImplementedError())
@@ -133,7 +148,7 @@ def main(args):
     trainer = Trainer(config, (train_dataloader, val_dataloader, test_dataloader), logger, model)
 
     trainer.train()
-    trainer.test()
+    # trainer.test()
 
 if __name__ == "__main__":
 

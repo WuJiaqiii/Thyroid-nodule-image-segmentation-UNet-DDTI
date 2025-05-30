@@ -11,7 +11,8 @@ class UNet(nn.Module):
                  in_channels: int = 1,
                  out_channels: int = 1,
                  base_filters: int = 64,
-                 depth: int = 5):
+                 depth: int = 5,
+                 **kwargs):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -87,7 +88,8 @@ class ResUNet(nn.Module):
                  in_channels: int = 1,
                  out_channels: int = 1,
                  base_filters: int = 64,
-                 depth: int = 5):
+                 depth: int = 5,
+                 **kwargs):
         super().__init__()
         self.base_filters = base_filters
         self.depth = depth
@@ -153,7 +155,8 @@ class ASPPUNet(nn.Module):
                  out_channels: int = 1,
                  base_filters: int = 64,
                  depth: int = 5,
-                 aspp_dilations: list = [1,6,12,18]):
+                 aspp_dilations: list = [1,6,12,18],
+                 **kwargs):
         super().__init__()
         self.base_filters = base_filters
         self.depth = depth
@@ -235,7 +238,8 @@ class AttentionUNet(nn.Module):
                  in_channels: int = 1,
                  out_channels: int = 1,
                  base_filters: int = 64,
-                 depth: int = 5):
+                 depth: int = 5,
+                 **kwargs):
         super().__init__()
         self.base_filters = base_filters
         self.depth = depth
@@ -324,7 +328,8 @@ class TransUNet(nn.Module):
                  num_transformer_layers: int = 4,
                  num_heads: int = 8,
                  embed_dim: int = 256,
-                 image_size: int = 512):
+                 image_size: int = 512,
+                 **kwargs):
         super().__init__()
         self.base_filters = base_filters
         self.depth = depth
@@ -405,7 +410,8 @@ class VNet2D(nn.Module):
                  in_channels: int = 1,
                  out_channels: int = 1,
                  base_filters: int = 16,
-                 depth: int = 5):
+                 depth: int = 5,
+                 **kwargs):
         super().__init__()
         self.base_filters = base_filters
         self.depth = depth
@@ -466,7 +472,8 @@ class ImprovedVNet(nn.Module):
                  base_filters: int = 16,
                  depth: int = 5,
                  use_attention: bool = True,
-                 deep_supervision: bool = False):
+                 deep_supervision: bool = False,
+                 **kwargs):
         super().__init__()
         self.base_filters = base_filters
         self.depth = depth

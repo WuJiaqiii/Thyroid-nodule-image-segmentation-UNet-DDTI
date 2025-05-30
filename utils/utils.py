@@ -10,6 +10,7 @@ from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch.nn as nn
+import sys
 
 class Config:        
     def __init__(self, args):
@@ -68,6 +69,59 @@ class AverageMeter(object):
         self.count += n
         self.avg = self.sum / self.count
 
+# def create_logger(filename):
+#     # 1. 基本 Logger 配置
+#     logger = logging.getLogger(filename)
+#     logger.setLevel(logging.DEBUG)
+
+#     if not logger.handlers:
+#         def custom_time(*args):
+#             # UTC+8 时间
+#             tz8 = datetime.now(tz=timezone.utc) + timedelta(hours=8)
+#             return tz8.timetuple()
+
+#         formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+#         formatter.converter = custom_time
+
+#         # 控制台 Handler
+#         ch = logging.StreamHandler()
+#         ch.setLevel(logging.INFO)
+#         ch.setFormatter(formatter)
+#         logger.addHandler(ch)
+
+#         # 文件 Handler
+#         fh = logging.FileHandler(filename)
+#         fh.setLevel(logging.DEBUG)
+#         fh.setFormatter(formatter)
+#         logger.addHandler(fh)
+
+#     # 2. 未捕获异常钩子
+#     def handle_exception(exc_type, exc_value, exc_tb):
+#         if issubclass(exc_type, KeyboardInterrupt):
+#             # Ctrl+C 时用默认行为
+#             sys.__excepthook__(exc_type, exc_value, exc_tb)
+#             return
+#         logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_tb))
+
+#     sys.excepthook = handle_exception
+
+#     # 3. stdout/err 重定向
+#     class StreamToLogger:
+#         def __init__(self, logger, level):
+#             self.logger = logger
+#             self.level = level
+#         def write(self, msg):
+#             msg = msg.strip()
+#             if msg:
+#                 self.logger.log(self.level, msg)
+#         def flush(self):
+#             pass
+
+#     sys.stdout = StreamToLogger(logger, logging.INFO)
+#     sys.stderr = StreamToLogger(logger, logging.ERROR)
+
+#     return logger
+
 def create_logger(filename):
     
     def custom_time(*args):
@@ -90,6 +144,29 @@ def create_logger(filename):
 
     logger.addHandler(ch)
     logger.addHandler(fh)
+    
+    # # 将未捕获的异常交给 logger.error 去记录
+    # def handle_exception(exc_type, exc_value, exc_traceback):
+    #     if issubclass(exc_type, KeyboardInterrupt):
+    #         # 保持 Ctrl+C 正常退出
+    #         sys.__excepthook__(exc_type, exc_value, exc_traceback)
+    #         return
+    #     logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+    # sys.excepthook = handle_exception
+
+    # class StreamToLogger:
+    #     def __init__(self, logger, level):
+    #         self.logger = logger
+    #         self.level = level
+    #     def write(self, message):
+    #         message = message.strip()
+    #         if message:
+    #             self.logger.log(self.level, message)
+    #     def flush(self):
+    #         pass
+
+    # # sys.stdout = StreamToLogger(logger, logging.INFO)
+    # sys.stderr = StreamToLogger(logger, logging.ERROR)
 
     return logger
 
