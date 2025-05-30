@@ -2,9 +2,10 @@ import os
 import argparse
 from PIL import Image
 
-from models.model import UNet
-from models.vnet import ImprovedVNet
-from models.mores import AttentionUNet, ResUNet, ASPPUNet, TransUNet, VNet2D
+# from models.model import UNet
+# from models.vnet import ImprovedVNet
+# from models.mores import AttentionUNet, ResUNet, ASPPUNet, TransUNet, VNet2D
+from models.mod import *
 from data.data_loader import MedicalDataset, create_dataloader
 
 from utils.utils import create_logger, set_seed, Config
@@ -35,7 +36,7 @@ def get_parser():
     parser.add_argument('--bce_ratio', type=float, default=1)
     parser.add_argument('--dice_ratio', type=float, default=1)
     parser.add_argument('--focal_ratio', type=float, default=1)
-    parser.add_argument('--boundary_ratio', type=float, default=1)
+    parser.add_argument('--boundary_ratio', type=float, default=0.01)
 
     ## train config
     parser.add_argument('--num_workers', default=4, type=int)
@@ -101,10 +102,10 @@ def main(args):
     
     if config.model_type == 'UNet':
         model = UNet(in_channels=1, out_channels=1)
-    elif config.model_type == 'VNet':
+    elif config.model_type == 'VNet2D':
         model = VNet2D(in_channels=1, out_channels=1)
     elif config.model_type == 'ImprovedVNet':
-        model = ImprovedVNet(in_channels=1, num_classes=1)
+        model = ImprovedVNet(in_channels=1, out_channels=1)
     elif config.model_type == 'TransUNet':
         model = TransUNet(in_channels=1, out_channels=1)
     elif config.model_type == 'ResUNet':
@@ -118,6 +119,16 @@ def main(args):
         raise(NotImplementedError())
     # if os.path.isfile(config.checkpoint_path):
     #     model.load_state_dict(torch.load(config.checkpoint_path, weights_only=True))
+
+    # --- 统计并打印可训练参数量 ------------------------
+    def count_params(model):
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    param_num = count_params(model)
+    param_str = f"{param_num/1e6:.2f}M ({param_num:,})"
+    logger.info(f"Model: {config.model_type} | Trainable params: {param_str}")
+    print(f"[PARAMS] {config.model_type},{param_num}")   # 方便 bash 捕获
+    # ---------------------------------------------------
 
     trainer = Trainer(config, (train_dataloader, val_dataloader, test_dataloader), logger, model)
 
