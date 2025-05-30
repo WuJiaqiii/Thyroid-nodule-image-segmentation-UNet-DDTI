@@ -64,7 +64,7 @@ class ImprovedVNet(nn.Module):
     Improved V-Net model for thyroid nodule segmentation.
     Uses a three-branch encoder fusion structure with SE modules and a U-Net style decoder.
     """
-    def __init__(self, in_channels=1, num_classes=1, base_num_filters=16, dropout_rate=0.05, se_reduction=4):
+    def __init__(self, in_channels=1, num_classes=1, base_num_filters=64, dropout_rate=0.05, se_reduction=4):
         super(ImprovedVNet, self).__init__()
         self.num_branches = 3  # Three encoder branches for triple fusion
         self.in_channels = in_channels

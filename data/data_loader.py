@@ -26,19 +26,6 @@ class MedicalDataset(Dataset):
             
         return img, mask
 
-class MySampler(Sampler):
-    def __init__(self):
-        pass
-
-    def __iter__(self):
-        pass
-
-    def __len__(self):
-        pass
-
-def collate_fn():
-    pass
-
 def create_dataloader(dataset, config, shuffle):
     return DataLoader(dataset=dataset,
                       batch_size=config.batch_size,

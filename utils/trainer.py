@@ -7,7 +7,7 @@ import os
 import matplotlib.pyplot as plt
 from skimage import measure
 
-from models.loss import DiceLoss
+from models.loss import DiceLoss, CompositeLoss, FocalTverskyLoss, BoundaryLoss
 from torch.amp import autocast, GradScaler
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim import AdamW
@@ -34,6 +34,9 @@ class Trainer:
 
         self.criterion_dice = DiceLoss()
         self.criterion_bce = nn.BCEWithLogitsLoss()
+        self.criterion_focal = FocalTverskyLoss()
+        self.criterion_boundary = BoundaryLoss()
+        self.criterion = CompositeLoss()
         self.optimizer = AdamW(self.model.parameters(), lr=self.config.lr)
         self.scheduler = CosineAnnealingWarmRestarts(self.optimizer, T_0=20, T_mult=2, eta_min=0)
             
@@ -44,6 +47,9 @@ class Trainer:
         
         bce_loss_record = AverageMeter()
         dice_loss_record = AverageMeter()
+        focal_loss_record = AverageMeter()
+        boundary_loss_record = AverageMeter()
+        loss_record = AverageMeter()
         
         self.model.train()
         preds, targets = [], []
@@ -58,14 +64,19 @@ class Trainer:
                 logits = self.model(images)
                 loss_bce = self.criterion_bce(logits, masks)
                 loss_dice = self.criterion_dice(logits, masks)
+                loss_focal = self.criterion_focal(logits, masks)
+                loss_boundary = self.criterion_boundary(logits, masks)
 
-                loss = loss_bce + self.config.alpha * loss_dice
+                loss = self.config.bce_ratio * loss_bce + self.config.dice_ratio * loss_dice + self.config.focal_ratio * loss_focal + self.config.boundary_ratio * loss_boundary
             self.scaler.scale(loss).backward()
             self.scaler.step(self.optimizer)
             self.scaler.update()
 
             bce_loss_record.update(loss_bce.item(), masks.size(0))
             dice_loss_record.update(loss_dice.item(), masks.size(0))
+            focal_loss_record.update(loss_focal.item(), masks.size(0))
+            boundary_loss_record.update(loss_boundary.item(), masks.size(0))
+            loss_record.update(loss.item(), masks.size(0))
 
             preds.append((torch.sigmoid(logits) > 0.5).cpu().numpy())
             targets.append(masks.cpu().numpy())
@@ -74,11 +85,13 @@ class Trainer:
         acc = calculate_acc(preds, targets)
         precision, recall, f1 = calculate_precision_recall_f1(preds, targets)
         iou = calculate_iou(preds, targets)
-        self.logger.info(f'Train Epoch: {epoch + 1}, Avg Loss: {(bce_loss_record.avg + self.config.alpha * dice_loss_record.avg):.4f}, '
-                         f'BCE Loss: {bce_loss_record.avg:.4f}, Dice Loss: {dice_loss_record.avg:.4f}, '
-                         f'acc: {acc:.4f}, precision: {precision:.4f}, recall: {recall:.4f}, f1: {f1:.4f}, IoU: {iou:.4f}')
+        self.logger.info(f'Train Epoch: {epoch + 1}, Avg Loss: {(loss_record.avg):.4f}')
+        self.logger.info(f'BCE Loss: {bce_loss_record.avg:.4f}, Dice Loss: {dice_loss_record.avg:.4f}, Focal Loss: {focal_loss_record.avg:.4f}, Boundary Loss: {boundary_loss_record.avg:.4f}')
+        self.logger.info(f'acc: {acc:.4f}, precision: {precision:.4f}, recall: {recall:.4f}, f1: {f1:.4f}, IoU: {iou:.4f}')
         self.writer.add_scalar("BCE Loss/Train", bce_loss_record.avg, epoch)
         self.writer.add_scalar("Dice Loss/Train", dice_loss_record.avg, epoch)
+        self.writer.add_scalar("Focal Loss/Train", focal_loss_record.avg, epoch)
+        self.writer.add_scalar("Boundary Loss/Train", boundary_loss_record.avg, epoch)
         self.writer.add_scalar("Acc/Train", acc, epoch)
         self.writer.add_scalar("Precision/Train", precision, epoch)
         self.writer.add_scalar("Recall/Train", recall, epoch)
@@ -90,6 +103,10 @@ class Trainer:
         
         bce_loss_record = AverageMeter()
         dice_loss_record = AverageMeter()
+        focal_loss_record = AverageMeter()
+        boundary_loss_record = AverageMeter()
+        loss_record = AverageMeter()
+
         self.model.eval()
         preds, targets = [], []
         start = time.time()
@@ -102,9 +119,15 @@ class Trainer:
                 logits = self.model(images)
                 loss_bce = self.criterion_bce(logits, masks)
                 loss_dice = self.criterion_dice(logits, masks)
+                loss_focal = self.criterion_focal(logits, masks)
+                loss_boundary = self.criterion_boundary(logits, masks)
+                loss = self.config.bce_ratio * loss_bce + self.config.dice_ratio * loss_dice + self.config.focal_ratio * loss_focal + self.config.boundary_ratio * loss_boundary
 
             bce_loss_record.update(loss_bce.item(), masks.size(0))
             dice_loss_record.update(loss_dice.item(), masks.size(0))
+            focal_loss_record.update(loss_focal.item(), masks.size(0))
+            boundary_loss_record.update(loss_boundary.item(), masks.size(0))
+            loss_record.update(loss.item(), masks.size(0))
             
             preds.append((torch.sigmoid(logits) > 0.5).cpu().numpy())
             targets.append(masks.cpu().numpy())   
@@ -113,18 +136,20 @@ class Trainer:
         acc = calculate_acc(preds, targets)
         precision, recall, f1 = calculate_precision_recall_f1(preds, targets)
         iou = calculate_iou(preds, targets)
-        self.logger.info(f'Validate Epoch: {epoch + 1}, Avg Loss: {(bce_loss_record.avg + self.config.alpha * dice_loss_record.avg):.4f}, '
-                         f'BCE Loss: {bce_loss_record.avg:.4f}, Dice Loss: {dice_loss_record.avg:.4f}, '
-                         f'acc: {acc:.4f}, precision: {precision:.4f}, recall: {recall:.4f}, f1: {f1:.4f}, IoU: {iou:.4f}')
+        self.logger.info(f'Validate Epoch: {epoch + 1}, Avg Loss: {(loss_record.avg):.4f}')
+        self.logger.info(f'BCE Loss: {bce_loss_record.avg:.4f}, Dice Loss: {dice_loss_record.avg:.4f}, Focal Loss: {focal_loss_record.avg:.4f}, Boundary Loss: {boundary_loss_record.avg:.4f}')
+        self.logger.info(f'acc: {acc:.4f}, precision: {precision:.4f}, recall: {recall:.4f}, f1: {f1:.4f}, IoU: {iou:.4f}')
         self.writer.add_scalar("BCE Loss/Validate", bce_loss_record.avg, epoch)
         self.writer.add_scalar("Dice Loss/Validate", dice_loss_record.avg, epoch)
+        self.writer.add_scalar("Focal Loss/Train", focal_loss_record.avg, epoch)
+        self.writer.add_scalar("Boundary Loss/Train", boundary_loss_record.avg, epoch)
         self.writer.add_scalar("Acc/Validate", acc, epoch)
         self.writer.add_scalar("Precision/Validate", precision, epoch)
         self.writer.add_scalar("Recall/Validate", recall, epoch)
         self.writer.add_scalar("F1/Validate", f1, epoch)
         self.writer.add_scalar("IoU/Validate", iou, epoch)
 
-        return bce_loss_record.avg + self.config.alpha * dice_loss_record.avg, iou
+        return loss_record.avg, iou
 
     def train(self):
         
@@ -138,7 +163,7 @@ class Trainer:
 
             if val_iou > best_val_iou:
                 best_val_iou = val_iou
-                best_path = os.path.join(self.config.model_dir, f'model_best.pth')
+                best_path = os.path.join(self.config.model_dir, f'{self.config.model_type}_best.pth')
                 if torch.cuda.device_count() > 1 and self.config.use_data_parallel:
                     torch.save(self.model.module.state_dict(), best_path)
                 else:
@@ -152,9 +177,9 @@ class Trainer:
                 break
 
         if torch.cuda.device_count() > 1 and self.config.use_data_parallel:
-            torch.save(self.model.module.state_dict(), os.path.join(self.config.model_dir, f'model_last.pth'))
+            torch.save(self.model.module.state_dict(), os.path.join(self.config.model_dir, f'{self.config.model_type}_last.pth'))
         else:
-            torch.save(self.model.state_dict(), os.path.join(self.config.model_dir, f'model_last.pth'))
+            torch.save(self.model.state_dict(), os.path.join(self.config.model_dir, f'{self.config.model_type}_last.pth'))
         
         self.writer.close()
     
