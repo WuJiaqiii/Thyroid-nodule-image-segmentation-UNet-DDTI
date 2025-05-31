@@ -36,9 +36,9 @@ def get_parser():
     parser.add_argument('--model_type', default='UNet', type=str)
 
     ## loss config
-    parser.add_argument('--bce_ratio', type=float, default=1)
-    parser.add_argument('--dice_ratio', type=float, default=1)
-    parser.add_argument('--focal_ratio', type=float, default=1)
+    parser.add_argument('--bce_ratio', type=float, default=0)
+    parser.add_argument('--dice_ratio', type=float, default=0)
+    parser.add_argument('--focal_ratio', type=float, default=0)
     parser.add_argument('--boundary_ratio', type=float, default=0.01)
 
     ## train config
@@ -48,7 +48,7 @@ def get_parser():
     parser.add_argument('--lr', type=float, default=1e-5)
     parser.add_argument('--weight_decay', type=float, default=1e-2)
     parser.add_argument('--save_interval', default=20, type=int)
-    parser.add_argument('--early_stop_patience', default=50, type=int)
+    parser.add_argument('--early_stop_patience', default=25, type=int)
     parser.add_argument('--alpha', type=float, default=2)
 
     ## other config
@@ -115,23 +115,25 @@ def main(args):
     
     config.model_type = model_type
     
-    if config.model_type == 'UNet':
-        model = UNet(**model_kwargs)
-    elif config.model_type == 'VNet2D':
-        model = VNet2D(**model_kwargs)
-    elif config.model_type == 'ImprovedVNet':
-        model = ImprovedVNet(**model_kwargs)
-    elif config.model_type == 'TransUNet':
-        model = TransUNet(**model_kwargs)
-    elif config.model_type == 'ResUNet':
-        model = ResUNet(**model_kwargs)
-    elif config.model_type == 'ASPPUNet':
-        model = ASPPUNet(**model_kwargs)
-    elif config.model_type == 'AttentionUNet':
-        model = AttentionUNet(**model_kwargs)
-    else:
-        logger.error('Inplemented model')
-        raise(NotImplementedError())
+    model = ResUNet()
+    
+    # if config.model_type == 'UNet':
+    #     model = UNet(**model_kwargs)
+    # elif config.model_type == 'VNet2D':
+    #     model = VNet2D(**model_kwargs)
+    # elif config.model_type == 'ImprovedVNet':
+    #     model = ImprovedVNet(**model_kwargs)
+    # elif config.model_type == 'TransUNet':
+    #     model = TransUNet(**model_kwargs)
+    # elif config.model_type == 'ResUNet':
+    #     model = ResUNet(**model_kwargs)
+    # elif config.model_type == 'ASPPUNet':
+    #     model = ASPPUNet(**model_kwargs)
+    # elif config.model_type == 'AttentionUNet':
+    #     model = AttentionUNet(**model_kwargs)
+    # else:
+    #     logger.error('Inplemented model')
+    #     raise(NotImplementedError())
     # if os.path.isfile(config.checkpoint_path):
     #     model.load_state_dict(torch.load(config.checkpoint_path, weights_only=True))
 
