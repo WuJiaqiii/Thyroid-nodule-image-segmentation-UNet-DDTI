@@ -22,7 +22,7 @@ def get_parser():
     parser.add_argument('--dataset_path', default='data/dataset', type=str)
     parser.add_argument('--dataset', default='DDTI', type=str)
 
-    parser.add_argument('--checkpoint_path', default='model_last.pth', type=str)
+    parser.add_argument('--checkpoint_path', default='/root/Desktop/Thyroid-nodule-image-segmentation-UNet-DDTI/experiments/ResUNet_20250601_194117/models/ResUNet_best.pth', type=str)
     parser.add_argument('--config_path', default=None, type=str)
 
     ## data argument config
@@ -31,24 +31,28 @@ def get_parser():
     parser.add_argument('--use_speckle', action='store_true')
     parser.add_argument('--use_tgc',     action='store_true')
     parser.add_argument('--use_clahe',   action='store_true')
+    
+    parser.add_argument('--use_mixup',   action='store_true')
+    parser.add_argument('--mixup_alpha', type=float, default=0.2)
+    parser.add_argument('--mixup_prob', type=float, default=0.3)
 
     ## model config
-    parser.add_argument('--model_type', default='UNet', type=str)
+    parser.add_argument('--model_type', default='ResUNet', type=str)
 
     ## loss config
-    parser.add_argument('--bce_ratio', type=float, default=0)
+    parser.add_argument('--bce_ratio', type=float, default=1)
     parser.add_argument('--dice_ratio', type=float, default=0)
-    parser.add_argument('--focal_ratio', type=float, default=0)
-    parser.add_argument('--boundary_ratio', type=float, default=0.01)
+    parser.add_argument('--focal_ratio', type=float, default=1)
+    parser.add_argument('--boundary_ratio', type=float, default=0)
 
     ## train config
     parser.add_argument('--num_workers', default=4, type=int)
     parser.add_argument('--epochs', type=int, default=10000)
-    parser.add_argument('--batch_size', default=8, type=int)
+    parser.add_argument('--batch_size', default=16, type=int)
     parser.add_argument('--lr', type=float, default=1e-5)
     parser.add_argument('--weight_decay', type=float, default=1e-2)
     parser.add_argument('--save_interval', default=20, type=int)
-    parser.add_argument('--early_stop_patience', default=25, type=int)
+    parser.add_argument('--early_stop_patience', default=50, type=int)
     parser.add_argument('--alpha', type=float, default=2)
 
     ## other config
@@ -67,16 +71,16 @@ def build_train_transform(cfg):
     tfs = []
     
     if cfg.use_elastic:
-        tfs.append(ElasticDeform(p=0.7))
+        tfs.append(ElasticDeform(p=0.25))
     tfs += [
         Flip(0.5),
         Rotate(0.5),
         AdjustBrightness(0.5)
     ]
     if cfg.use_speckle:
-        tfs.append(SpeckleNoise(p=0.5))
+        tfs.append(SpeckleNoise(p=0.3))
     if cfg.use_tgc:
-        tfs.append(TGCAugment(p=0.5))
+        tfs.append(TGCAugment(p=0.25))
     if cfg.use_clahe:
         tfs.append(CLAHE(p=0.3))
 
@@ -103,17 +107,17 @@ def main(args):
     val_dataloader = create_dataloader(val_dataset, config, shuffle=False)
     test_dataloader = create_dataloader(test_dataset, config, shuffle=True)
     
-    if os.path.isfile(config.config_path):
-        with open(config.config_path, "r", encoding="utf-8") as f:
-            cfg = yaml.safe_load(f)
-            model_cfg   = cfg["model"]
-            model_type  = model_cfg["model_type"]   # 字符串 "VNet2D"
-            model_kwargs = model_cfg["kwargs"]      # dict: {"in_channels":1, …}
-    else:
-        logger.error(f'未找到配置文件：{config.config_path}')
-        raise FileNotFoundError(f'未找到配置文件：{config.config_path}')
+    # if os.path.isfile(config.config_path):
+    #     with open(config.config_path, "r", encoding="utf-8") as f:
+    #         cfg = yaml.safe_load(f)
+    #         model_cfg   = cfg["model"]
+    #         model_type  = model_cfg["model_type"]   # 字符串 "VNet2D"
+    #         model_kwargs = model_cfg["kwargs"]      # dict: {"in_channels":1, …}
+    # else:
+    #     logger.error(f'未找到配置文件：{config.config_path}')
+    #     raise FileNotFoundError(f'未找到配置文件：{config.config_path}')
     
-    config.model_type = model_type
+    config.model_type = "ResUNet"
     
     model = ResUNet()
     
@@ -134,8 +138,8 @@ def main(args):
     # else:
     #     logger.error('Inplemented model')
     #     raise(NotImplementedError())
-    # if os.path.isfile(config.checkpoint_path):
-    #     model.load_state_dict(torch.load(config.checkpoint_path, weights_only=True))
+    if os.path.isfile(config.checkpoint_path):
+        model.load_state_dict(torch.load(config.checkpoint_path, weights_only=True))
 
     # --- 统计并打印可训练参数量 ------------------------
     def count_params(model):
@@ -149,8 +153,8 @@ def main(args):
 
     trainer = Trainer(config, (train_dataloader, val_dataloader, test_dataloader), logger, model)
 
-    trainer.train()
-    # trainer.test()
+    # trainer.train()
+    trainer.test()
 
 if __name__ == "__main__":
 

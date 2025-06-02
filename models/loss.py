@@ -24,7 +24,7 @@ class DiceLoss(nn.Module):
         return 1 - dice.mean()
 
 class FocalTverskyLoss(nn.Module):
-    def __init__(self, alpha=0.5, beta=0.5, gamma=1.0, smooth=1e-6):
+    def __init__(self, alpha=0.4, beta=0.6, gamma=2.0, smooth=1e-6):
         super().__init__()
         self.alpha = alpha
         self.beta = beta

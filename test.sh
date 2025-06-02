@@ -10,15 +10,17 @@ set -euo pipefail
 # 1) 把需要执行的命令写进下面的数组（按顺序）
 ###############################################################################
 COMMANDS=(
-  "python main.py --bce_ratio=1"
-  "python main.py --bce_ratio=0.5"
-  "python main.py --bce_ratio=0.2"
-  "python main.py --bce_ratio=0.1"
-  # 在此继续添加 ...
+  # "python main.py --model_type=ResUNet" 0.6449
+  # "python main.py --use_speckle  --model_type=ResUNet" 0.6457
+  # "python main.py --use_tgc  --model_type=ResUNet" 0.6276
+  # "python main.py --use_clahe  --model_type=ResUNet" 0.6248
+  "python main.py --use_mixup  --model_type=ResUNet" 0.6420
+  "python main.py --use_elastic --model_type=ResUNet" 0.6212
+  "python main.py --use_tgc  --model_type=ResUNet" 0.6390
 )
 ###############################################################################
 
-MAX_JOBS=2          # 并行上限
+MAX_JOBS=3          # 并行上限
 MIN_GAP=2           # 每条命令启动间隔（秒）
 
 # 等待直到后台运行的任务数 < MAX_JOBS
